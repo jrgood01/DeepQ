@@ -25,5 +25,17 @@ DQNTrainer::DQNTrainer(Gym &gym) : gym(gym) {
     model.Add<Linear>(gym.GetNumActions());
     model.Add<LogSoftMax>();
     // Set the training parameters
+}
 
+void DQNTrainer::advance() {
+    float reward = gym.ApplyAction(0);
+    if (bufferHead == NULL) {
+        bufferHead = new TrainBufferNode(gym.GetState(), 0, reward);
+        bufferTail = bufferHead;
+    } else {
+        bufferTail->setNext(new TrainBufferNode(gym.GetState(), 0, reward));
+        bufferTail = bufferTail->getNext();
+    }
+    bufferSize++;
+    std::cout << "Buffer size: " << bufferSize << " Bytes: " << bufferSize * 210 * 180 << std::endl;
 }

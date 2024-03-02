@@ -18,7 +18,8 @@ int main() {
         //Listen for up and down arrow keys
         const Uint8 *state = SDL_GetKeyboardState(NULL);
         gymWindow.UpdateScreenBuffer(myGym.GetState()); // Update the texture with the pixel buffer
-        myGym.ApplyAction(0);
+        trainer.advance();
+        
         quit = gymWindow.Update(); // Process events and update the window
     }
 

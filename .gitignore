@@ -1,0 +1,4 @@
+main
+trainer/*.o
+gym/*.o
+gui/*.o
