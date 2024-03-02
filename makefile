@@ -1,10 +1,11 @@
-# Compiler settings - Can be customized.
 CXX = g++
-CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym $(shell sdl2-config --cflags)
-LDFLAGS = $(shell sdl2-config --libs)
+# Added the necessary include directories for LibTorch
+CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I./include/libtorch/include -I./include/libtorch/include/torch/csrc/api/include $(shell sdl2-config --cflags)
+# Added the necessary library paths and libraries for LibTorch
+LDFLAGS = $(shell sdl2-config --libs) -L./include/libtorch/lib -Wl,-rpath,./include/libtorch/lib -ltorch -lc10
 
 # Find all cpp files in the current directory and subdirectories
-SOURCES = $(wildcard *.cpp) $(wildcard gui/*.cpp) $(wildcard gym/*.cpp)
+SOURCES = $(wildcard *.cpp) $(wildcard gui/*.cpp) $(wildcard gym/*.cpp) $(wildcard trainer/*.cpp)
 # Define object files based on the source files
 OBJECTS = $(SOURCES:.cpp=.o)
 # Name of the executable

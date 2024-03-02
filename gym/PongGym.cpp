@@ -69,7 +69,8 @@ int PongGym::ApplyAction(int actionID){
             }
             break; 
     }
-
+    
+    return DetectCollision();
     UpdateState();
 }
 
