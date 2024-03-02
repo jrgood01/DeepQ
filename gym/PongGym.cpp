@@ -4,6 +4,8 @@
 #include <string>
 #include <cstdlib> 
 #include <cmath>
+#include <chrono>
+#include <thread>
 
 PongGym::PongGym() : ballLocation{0, 0}, paddleRLocation{0, 0}, paddleLLocation{0, 0}, ballVelocityX(1), ballVelocityY(1) {
     paddleRLocation.x = GetScreenWidth() - PADDLE_WIDTH;
@@ -46,7 +48,7 @@ void PongGym::UpdateState() {
     DrawRectangle(ballLocation.x, ballLocation.y, BALL_WIDTH, BALL_WIDTH, BALL_COLOR);
 }
 
-int PongGym::ApplyAction(int actionID){
+float PongGym::ApplyAction(int actionID){
     switch(actionID) {
         case (PADDLE_L_UP):
             if (paddleLLocation.y > 0) {
@@ -69,40 +71,86 @@ int PongGym::ApplyAction(int actionID){
             }
             break; 
     }
-    
-    return DetectCollision();
+    ballLocation.x += ballVelocityX;
+    ballLocation.y += ballVelocityY;
+    int collision = DetectCollision();
+    float reward = 0.0;
+    if (collision == 5) {
+        reward = -1.0;
+    }
+    if (collision == 1 || collision == 2) {
+        reward = 1.0;
+    }
     UpdateState();
+    return 0.0;
 }
 
 /*
 Detects collision with padles or walls
 */
 int PongGym::DetectCollision() {
+    // Get the current time in nanoseconds
+    auto now = std::chrono::high_resolution_clock::now();
+    auto now_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
+    auto epoch = now_ns.time_since_epoch();
+    auto value = std::chrono::duration_cast<std::chrono::nanoseconds>(epoch);
+    long seed = value.count();
+
+    // Use the current time in nanoseconds as the seed for the random number generator
+    srand(seed);
+
+    float randomSpeedAdjustment = static_cast<float>(rand() % 20) / 100.0f + .9;
+
+    int collision = 0;
     if (ballLocation.y < 2) {
-        ballLocation.y = 0;
-        return 3;
+        ballVelocityY *= -1; // Reverse the y-direction of the ball
+        collision = 3;
     }
     if (ballLocation.y > GetScreenHeight() - BALL_HEIGHT) {
-        ballLocation.y = GetScreenHeight() - BALL_HEIGHT;
-        return 4;
+        ballVelocityY *= -1; // Reverse the y-direction of the ball
+        collision = 4;
     }
     if (ballLocation.x < 2) {
-        ballLocation.x = 0;
-        return 5;
+        ballLocation.x = GetScreenWidth() / 2;
+        ballLocation.y = GetScreenHeight() / 2;
+        collision = 5;
     }
     if (ballLocation.x > GetScreenWidth() - BALL_WIDTH) {
-        ballLocation.x = GetScreenWidth() - BALL_WIDTH;
-        return 5;
+        ballLocation.x = GetScreenWidth() / 2;
+        ballLocation.y = GetScreenHeight() / 2;
+        collision = 5;
     }
     if (ballLocation.x < paddleLLocation.x + PADDLE_WIDTH && ballLocation.y > paddleLLocation.y && ballLocation.y < paddleLLocation.y + PADDLE_HEIGHT) {
-        ballLocation.x = paddleLLocation.x + PADDLE_WIDTH;
-        return 2;
+        ballVelocityX *= -1; // Reverse the x-direction of the ball
+        collision = 2;
     }
     if (ballLocation.x + BALL_WIDTH > paddleRLocation.x && ballLocation.y > paddleRLocation.y && ballLocation.y < paddleRLocation.y + PADDLE_HEIGHT) {
         ballLocation.x = paddleRLocation.x - BALL_WIDTH;
-        return 1;
+        ballVelocityX *= -1; // Reverse the x-direction of the ball
+        collision = 1;
     }
-    return 0;
+
+    if (collision != 0) {
+        ballVelocityX *= randomSpeedAdjustment;
+        ballVelocityY *= randomSpeedAdjustment;
+    }
+
+    if (abs(ballVelocityX) < 0.5) {
+        ballVelocityX *= 1.5;
+    }
+    if (abs(ballVelocityY) < 0.5) {
+        ballVelocityY *= 1.5;
+    }
+
+    if (abs(ballVelocityX) > 2) {
+        ballVelocityX *= 0.5;
+    }
+
+    if (abs(ballVelocityY) > 2) {
+        ballVelocityY *= 0.5;
+    }
+
+    return collision;
 }
 
 Uint16 PongGym::GetScreenWidth() {

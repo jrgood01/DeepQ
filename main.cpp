@@ -1,13 +1,18 @@
 #include <iostream>
+#include <mlpack/core.hpp>
+#include <mlpack/methods/ann/ffn.hpp>
+#include <mlpack/methods/ann/layer/layer.hpp>
+#include <mlpack.hpp>
 #include "gui/DisplayWindow.h"
 #include "gym/PongGym.h"
-
-
+#include "trainer/DQNTrainer.h"
+using namespace mlpack;
+using namespace mlpack::ann;
 int main() {
-    // Main application loop
     bool quit = false;
     PongGym myGym = PongGym();
-    
+    DQNTrainer trainer = DQNTrainer(myGym);
+
     DisplayWindow gymWindow(myGym.GetScreenWidth(), myGym.GetScreenHeight());
     while (!quit) {
         //Listen for up and down arrow keys

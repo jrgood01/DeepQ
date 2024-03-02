@@ -20,12 +20,12 @@ enum PongGymActions {
     PADDLE_R_DOWN
 };
 
-class PongGym : Gym {
+class PongGym : public Gym {
     public:
         PongGym();
 
         int GetNumActions();
-        int ApplyAction(int actionID);
+        float ApplyAction(int actionID);
         std::string ActionToString(int actionID);
         
         Uint32* GetState();

@@ -16,7 +16,7 @@ public:
 
     virtual int GetNumActions() = 0;
     virtual std::string ActionToString(int actionID) = 0;
-    virtual int ApplyAction(int actionID) = 0;
+    virtual float ApplyAction(int actionID) = 0;
     virtual Uint32* GetState() = 0;
     virtual Uint16 GetScreenWidth() = 0;
     virtual Uint16 GetScreenHeight() = 0;

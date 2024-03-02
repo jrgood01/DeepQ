@@ -1,9 +1,9 @@
+#requirements: SDL, LibTorch, OpenMP
 CXX = g++
 # Added the necessary include directories for LibTorch
-CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I./include/libtorch/include -I./include/libtorch/include/torch/csrc/api/include $(shell sdl2-config --cflags)
+CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I/opt/homebrew/include $(shell sdl2-config --cflags)
 # Added the necessary library paths and libraries for LibTorch
-LDFLAGS = $(shell sdl2-config --libs) -L./include/libtorch/lib -Wl,-rpath,./include/libtorch/lib -ltorch -lc10
-
+LDFLAGS = $(shell sdl2-config --libs) -larmadillo
 # Find all cpp files in the current directory and subdirectories
 SOURCES = $(wildcard *.cpp) $(wildcard gui/*.cpp) $(wildcard gym/*.cpp) $(wildcard trainer/*.cpp)
 # Define object files based on the source files
