@@ -82,7 +82,7 @@ float PongGym::ApplyAction(int actionID){
         reward = 1.0;
     }
     UpdateState();
-    return 0.0;
+    return reward;
 }
 
 /*

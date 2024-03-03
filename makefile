@@ -1,11 +1,11 @@
-#requirements: SDL, LibTorch, OpenMP
+#requirements: SDL, LibTorch, OpenMP, OpenCV
 CXX = g++
-# Added the necessary include directories for LibTorch
-CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I/opt/homebrew/include $(shell sdl2-config --cflags)
-# Added the necessary library paths and libraries for LibTorch
-LDFLAGS = $(shell sdl2-config --libs) -larmadillo
+# Added the necessary include directories for LibTorch and OpenCV
+CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I./util -I./include -I/opt/homebrew/include -g $(shell sdl2-config --cflags)
+# Added the necessary library paths and libraries for LibTorch and OpenCV
+LDFLAGS = $(shell sdl2-config --libs) -larmadillo -lopencv_core -lopencv_imgcodecs -lopencv_imgproc
 # Find all cpp files in the current directory and subdirectories
-SOURCES = $(wildcard *.cpp) $(wildcard gui/*.cpp) $(wildcard gym/*.cpp) $(wildcard trainer/*.cpp)
+SOURCES = $(wildcard *.cpp) $(wildcard gui/*.cpp) $(wildcard gym/*.cpp) $(wildcard trainer/*.cpp) $(wildcard util/*.cpp)
 # Define object files based on the source files
 OBJECTS = $(SOURCES:.cpp=.o)
 # Name of the executable
