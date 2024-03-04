@@ -7,7 +7,7 @@
 #include <chrono>
 #include <thread>
 
-PongGym::PongGym() : ballLocation{0, 0}, paddleRLocation{0, 0}, paddleLLocation{0, 0}, ballVelocityX(1), ballVelocityY(1) {
+PongGym::PongGym() : ballLocation{0, 0}, paddleRLocation{0, 0}, paddleLLocation{0, 0}, ballVelocityX(3), ballVelocityY(3) {
     paddleRLocation.x = GetScreenWidth() - PADDLE_WIDTH;
     
     ballLocation.x = GetScreenWidth() / 2;
@@ -23,7 +23,7 @@ PongGym::PongGym() : ballLocation{0, 0}, paddleRLocation{0, 0}, paddleLLocation{
 
 int PongGym::GetNumActions() {
     // Four actions: Paddle L up, Paddle L down, Paddle R up, Paddle R down
-    return 4;
+    return 5;
 }
 
 std::string PongGym::ActionToString(int actionID){
@@ -142,11 +142,11 @@ int PongGym::DetectCollision() {
         ballVelocityY *= 1.5;
     }
 
-    if (abs(ballVelocityX) > 2) {
+    if (abs(ballVelocityX) > 6) {
         ballVelocityX *= 0.5;
     }
 
-    if (abs(ballVelocityY) > 2) {
+    if (abs(ballVelocityY) > 6) {
         ballVelocityY *= 0.5;
     }
 

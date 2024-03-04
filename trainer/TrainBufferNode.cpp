@@ -2,7 +2,15 @@
 #include <vector>
 #include "TrainBufferNode.h"
 #include <iostream>
-
+#include <mlpack/core.hpp>
+#include <mlpack/methods/ann/ffn.hpp>
+#include <mlpack/methods/ann/layer/layer.hpp>
+#include <mlpack.hpp>
+using namespace mlpack;
+using namespace mlpack::ann;
+using namespace arma;
+using namespace std;
+using namespace ens;
 TrainBufferNode::TrainBufferNode(Uint32* state, int action, float reward): action(action), reward(reward) {
     //Deep copy the state
     this->state = (Uint32*)malloc(210 * 160 * sizeof(Uint32));
@@ -51,4 +59,20 @@ float TrainBufferNode::getReward() {
 
 Uint32* TrainBufferNode::getState() {
     return state;
+}
+
+float TrainBufferNode::getQvalue() {
+    return curQvalue;
+}
+
+void TrainBufferNode::setQvalue(float qvalue) {
+    curQvalue = qvalue;
+}
+
+void TrainBufferNode::setQvalues(arma::mat qValues) {
+    this->qValues = qValues;
+}
+
+arma::mat TrainBufferNode::getQvalues() {
+    return qValues;
 }

@@ -10,27 +10,15 @@
 
 using namespace mlpack;
 using namespace mlpack::ann;
+using namespace arma;
+using namespace std;
+using namespace ens;
+
 DQNTrainer::DQNTrainer(Gym &gym) : gym(gym), bufferHead(nullptr), bufferTail(nullptr), bufferSize(0){
     // Initialize the model
-    model = FFN<>();
-    // Main application loop
-    // Input size 4x84x84
-    // Conv layer 16 8x8 stride 4
-    model.Add<mlpack::ann::Convolution>(4, 8, 8, 4, 4, 16);
-    // Rectifier nonlinearity
-    model.Add<mlpack::ann::ReLU>();
-    // 32 4 x 4 stride 2
-    model.Add<mlpack::ann::Convolution>(16, 4, 4, 2, 2, 32);
-    // Rectifier nonlinearity
-    model.Add<mlpack::ann::ReLU>();
-    // Fully connected 256
-    model.Add<mlpack::ann::Linear>(256);
-    model.Add<mlpack::ann::ReLU>();
-    // Fully connected size n
-    model.Add<mlpack::ann::Linear>(gym.GetNumActions());
-    model.Add<mlpack::ann::LogSoftMax>();
-    // Set the training parameters
-    model.InputDimensions() = std::vector<size_t>({ 84, 84, 4 });
+    primaryNet = createNetwork();
+    //Target network
+    targetNet = createNetwork();
 
     //Create circular buffer of states
     stateBuffer = new TrainBufferNode(gym.GetState(), 0, 0);
@@ -44,31 +32,45 @@ DQNTrainer::DQNTrainer(Gym &gym) : gym(gym), bufferHead(nullptr), bufferTail(nul
     stateBuffer->setNext(temp);
     temp->setPrev(stateBuffer);
 
-    curState = 0;
+    curFrame = 0;
+    trainedFrames = 0;
+    framesSinceCopy = 0;
 }
 
+mlpack::ann::FFN<mlpack::ann::MeanSquaredError, mlpack::ann::RandomInitialization> DQNTrainer::createNetwork() {
+    mlpack::ann::FFN<mlpack::ann::MeanSquaredError, mlpack::ann::RandomInitialization> net;
+    // Main application loop
+    // Input size 4x84x84
+    // Conv layer 16 8x8 stride 4
+    net.Add<mlpack::ann::Convolution>(4, 8, 8, 4, 4, 16);
+    // Rectifier nonlinearity
+    net.Add<mlpack::ann::ReLU>();
+    // 32 4 x 4 stride 2
+    net.Add<mlpack::ann::Convolution>(16, 4, 4, 2, 2, 32);
+    // Rectifier nonlinearity
+    net.Add<mlpack::ann::ReLU>();
+    // Fully connected 256
+    net.Add<mlpack::ann::Linear>(256);
+    net.Add<mlpack::ann::ReLU>();
+    // Fully connected size n
+    net.Add<mlpack::ann::Linear>(gym.GetNumActions());
+    // Set the training parameters
+    net.InputDimensions() = std::vector<size_t>({ 84, 84, 4 });
 
-float DQNTrainer::calculateRollout(int maxDepth, float lambda, TrainBufferNode* node, int curDepth) {
-    if (node->getNext() == NULL) {
-        std::cout << "Reached end of rollout" << std::endl;
-        return -999999;
-    }
-
-    float reward = node->getReward();
-
-    float futureReward = 0;
-    if (curDepth < maxDepth) {
-        futureReward = calculateRollout(maxDepth, lambda, node->getNext(), curDepth + 1);
-    }
-    return reward + lambda * futureReward;
+    return net;
 }
 
 void DQNTrainer::advance() {
+    if (curFrame - trainedFrames > 20000) {
+        return;
+    }
     // Update the current state in the circular buffer
     stateBuffer = stateBuffer->getNext();
     stateBuffer->setState(gym.GetState());
     int action = 0;
-    if (curState > 4) {
+    float qVal = 0;
+    TrainBufferNode* addNode = new TrainBufferNode(gym.GetState(), 0, 0);
+    if (curFrame > 4) {
         // Create a matrix that contains the last four states from the circular buffer
         arma::mat state(84 * 84 * 4, 1);
         TrainBufferNode* temp = stateBuffer;
@@ -81,133 +83,211 @@ void DQNTrainer::advance() {
             delete[] processedImage;
             temp = temp->getPrev();
         }
-
         // Choose the best action based on the last four states
-        action = ChooseBestAction(state);
-    } 
-    float reward = gym.ApplyAction(action);
+        std::pair<arma::uword, float>  actionAndQVal = ChooseBestAction(state, addNode);
+    
+        float reward = gym.ApplyAction(actionAndQVal.first);
+        addNode->setReward(reward);
+        addNode->setQvalue(actionAndQVal.second);
+
+        bufferMutex.lock();
+        if (bufferHead == nullptr) {
+            bufferHead = addNode;
+            bufferTail = bufferHead;
+        } else {
+            bufferTail->setNext(addNode);
+            bufferTail = bufferTail->getNext();
+        }
+        bufferSize++;
+        bufferMutex.unlock();
+        // Choose the best action based on the last four states
+        curFrame += 1;
+    } else {
+        gym.ApplyAction(0);
+        addNode->setReward(0);
+        addNode->setQvalue(0);
+        addNode->setQvalues(arma::mat(gym.GetNumActions(), 1, arma::fill::zeros));
+    }
 
     bufferMutex.lock();
     if (bufferHead == nullptr) {
-        bufferHead = new TrainBufferNode(gym.GetState(), action, reward);
+        bufferHead = addNode;
         bufferTail = bufferHead;
     } else {
-        bufferTail->setNext(new TrainBufferNode(gym.GetState(), action, reward));
+        bufferTail->setNext(addNode);
         bufferTail = bufferTail->getNext();
     }
     bufferSize++;
     bufferMutex.unlock();
-    curState += 1;
+    curFrame += 1;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 void DQNTrainer::startAdvanceTimer() {
     std::thread([this]() {
         while (true) {
             this->advance();
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 200));
         }
     }).detach();
 }
 
 void DQNTrainer::deleteBufferHead() {
+    std::lock_guard<std::mutex> lock(bufferMutex);
     if (bufferHead == nullptr) {
         return;
     }
-    bufferMutex.lock();
     TrainBufferNode* temp = bufferHead;
     bufferHead = bufferHead->getNext();
+    if (bufferHead != nullptr) {
+        bufferHead->setPrev(nullptr);
+    }
+    if (bufferHead->getNext() != nullptr) {
+        bufferHead->getNext()->setPrev(nullptr);
+    }
+    temp->setNext(nullptr); // Prevents deleting the rest of the list if delete is called again on temp
     delete temp;
+    temp = nullptr; 
     bufferSize--;
-    bufferMutex.unlock();
 }
 
-int DQNTrainer::ChooseBestAction(arma::mat& state) {
-    float epsilon = 0.1;
+std::pair<arma::uword, float> DQNTrainer::ChooseBestAction(arma::mat& state, TrainBufferNode* node) {
+    float epsilon = 1 - (trainedFrames / 1000000.0);
+
+    if (epsilon < 0.1) {
+        epsilon = 0.1;
+    }
+
     unsigned seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     double prob = ((double) rand() / (RAND_MAX));
-    std::cout << "Probability: " << prob << std::endl;
+    arma::uword action;
+    float  qVal;
+    arma::mat input = arma::vectorise(state);
+
+    // Predict the Q-values for each action
+    arma::mat qValues;
+
+    targetNetMutex.lock();
+    targetNet.Predict(input, qValues);
+    targetNetMutex.unlock();
     if (prob < epsilon) {
         // Choose a random action
-        int action = rand() % gym.GetNumActions();
-        std::cout << "Choosing random action: " << action << std::endl;
-        return action;
+        action = (arma::uword) rand() % gym.GetNumActions();
+        qVal = (float) qValues(action);
     } else {
-        // Reshape the state into the appropriate format for the model
-        arma::mat input = arma::vectorise(state);
-
-        // Predict the Q-values for each action
-        arma::mat qValues;
-
-        modelMutex.lock();
-        model.Predict(input, qValues);
-        modelMutex.unlock();
-
-        // Find the action with the highest Q-value
-        arma::uword action;
         qValues.max(action);
-
-        // Return the best action
-        return action;
+        qVal = (float) qValues(action);
     }
+    node->setQvalue(qVal);
+    node->setAction(action);
+    node->setQvalues(qValues);
+    
+    return std::make_pair(action, qVal);
 }
+
+arma::mat DQNTrainer::grabState(TrainBufferNode* node) {
+        // Create a matrix that contains the last four states from the circular buffer
+        arma::mat state(84 * 84 * 4, 1);
+        TrainBufferNode* temp = stateBuffer;
+        for (int i = 0; i < 4; i++) {
+            if (temp == NULL) {
+                return NULL;
+            }
+            unsigned char* processedImage = new unsigned char[84 * 84];
+            ProcessImage(temp->getState(), processedImage, 210, 180, 84, 84);
+            for (int j = 0; j < 84 * 84; j++) {
+                state(j + i * 84 * 84, 0) = processedImage[j];
+            }
+            delete[] processedImage;
+            temp = temp->getPrev();
+        }
+
+        return state;
+}
+
 
 void DQNTrainer::trainLoop() {
     startAdvanceTimer();
-    while (true) {
-        if (bufferSize > 100) {
-            // Lock the buffer to safely access the training data
+    while (trainedFrames < 5000000) {
+        if (framesSinceCopy > 10000 && trainedFrames != 0) {
+            std::cout << "Trained frames: " << trainedFrames << std::endl;
+            std::cout << "Copying primary network to target network.\n";
+            targetNetMutex.lock();
+            targetNet.Parameters() = primaryNet.Parameters();
+            targetNetMutex.unlock();
+            std::cout << "Copy complete.\n";
+            framesSinceCopy = 0;
+            //save the model
+            bool success = data::Save("DeepQNet.xml", "model", primaryNet, false);
+            if (success) {
+                std::cout << "File saved successfully.\n";
+            } else {
+                std::cout << "Failed to save file.\n";
+            }
+        }
+        if (bufferSize >= 512) { // Ensure we have at least a batch's worth of data
             bufferMutex.lock();
 
-            // Initialize input matrix for the model: 4 channels of 84x84 images
-            arma::mat input(84 * 84 * 4, 1); // Flattened because MLPack expects column vectors for each sample
+            // Initialize matrices for batch inputs and outputs
+            arma::mat batchInputs(84 * 84 * 4, 256); // Each column will hold a flattened image
+            arma::mat batchOutputs(gym.GetNumActions(), 256, arma::fill::zeros); // Each column corresponds to the output for each image
 
-            // Assuming bufferHead points to the latest state and we collect 4 subsequent states
+            // Collect a batch of data
             TrainBufferNode* temp = bufferHead;
-            for (int i = 0; i < 4; i++) {
-                unsigned char* processedImage = new unsigned char[84 * 84]; // Allocate memory for the processed image
-                // Process the image from the game environment to the desired format
-                ProcessImage(temp->getState(), processedImage, 210, 180, 84, 84);
+            for (int b = 0; b < 256; ++b) {
+                // Get the state from the node
+                arma::mat state = grabState(temp);
 
-                // Copy processed image data into the input matrix
-                for (int j = 0; j < 84 * 84; j++) {
-                    input(j + i * 84 * 84, 0) = processedImage[j];
+                // Insert the state into the batchInputs matrix
+                batchInputs.col(b) = state;
+
+                // Set the corresponding output value for the action taken
+                float curQvalue = temp->getQvalue();
+                float q_alpha = .5 - (trainedFrames / 1000000.0);
+                if (q_alpha < 0.1) {
+                    q_alpha = 0.1;
                 }
+            
+    
+                //set output to node::qvalues
+                arma::mat qValues = temp->getQvalues();
+                batchOutputs.col(b) = qValues;
+                batchOutputs(temp->getAction(), b) = (1 - q_alpha) * curQvalue + q_alpha * (temp->getReward() + 0.99 * temp->getNext()->getQvalue());
 
-                // Clean up the processed image memory
-                delete[] processedImage;
-
-                // Move to the next state in the buffer
+                // Move to the next item in the buffer for the next iteration
                 temp = temp->getNext();
             }
 
-            // Unlock the buffer after accessing the data
+
+            //Shuffle the batch
+            arma::uvec indices = arma::shuffle(arma::linspace<arma::uvec>(0, 255, 256));
+
+            batchInputs = batchInputs.cols(indices);
+            batchOutputs = batchOutputs.cols(indices);
+
             bufferMutex.unlock();
 
-            // Calculate the target value for the current state-action pair
-            float rollout = calculateRollout(10, 0.9, temp, 0);
+            Adam optimizer(256, 64, 0.9, 0.999, 1e-8, 256, 1e-8, true);
 
-            // Prepare the output vector for training: size should match the number of actions
-            arma::mat output(gym.GetNumActions(), 1, arma::fill::zeros);
-            output(temp->getAction(), 0) = rollout;
 
-            // Train the model and print the loss and output and expected values
-            modelMutex.lock();
-            model.Train(input, output);
+            primaryNet.Train(batchInputs, batchOutputs, optimizer, PrintLoss(), ProgressBar());
+            //show outputs of one input
+            arma::mat input = batchInputs.col(0);
+            arma::mat output;
+            primaryNet.Predict(input, output);
+            std::cout << "Output: " << output << std::endl;
+            std::cout << "Expected: " << batchOutputs.col(0) << std::endl;
 
-            if (rollout != 0) {
-                //evaluate the model
-                arma::mat prediction;
-                model.Predict(input, prediction);
-                std::cout << "Output: " << prediction << std::endl;
-                std::cout << "Expected: " << output << std::endl;
+            // After training with this batch, delete the processed nodes from the buffer
+            for (int i = 0; i < 256; ++i) {
+                deleteBufferHead();
             }
-
-            modelMutex.unlock();
-
-            // Advance the buffer to process new data in the next iteration
-            deleteBufferHead();
+            trainedFrames += 256;
+            framesSinceCopy += 256;
+            std::cout << "Trained frames: " << trainedFrames << " / 1000000" << std::endl;
         }
     }
+    std::cout << "Training complete.\n";
 }
 
 void DQNTrainer::beginTraining() {

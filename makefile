@@ -1,7 +1,7 @@
 #requirements: SDL, LibTorch, OpenMP, OpenCV
 CXX = g++
 # Added the necessary include directories for LibTorch and OpenCV
-CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I./util -I./include -I/opt/homebrew/include -g $(shell sdl2-config --cflags)
+CXXFLAGS = -Wall -std=c++17 -I./gui -I./gym -I./util -I./include -I/opt/homebrew/include -g $(shell sdl2-config --cflags) -DMLPACK_ENABLE_ANN_SERIALIZATION
 # Added the necessary library paths and libraries for LibTorch and OpenCV
 LDFLAGS = $(shell sdl2-config --libs) -larmadillo -lopencv_core -lopencv_imgcodecs -lopencv_imgproc
 # Find all cpp files in the current directory and subdirectories
