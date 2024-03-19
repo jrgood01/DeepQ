@@ -76,10 +76,10 @@ float PongGym::ApplyAction(int actionID){
     int collision = DetectCollision();
     float reward = 0.0;
     if (collision == 5) {
-        reward = -1.0;
+        reward = -10.0;
     }
     if (collision == 1 || collision == 2) {
-        reward = 1.0;
+        reward = 10.0;
     }
     UpdateState();
     return reward;

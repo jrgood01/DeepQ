@@ -1,12 +1,14 @@
 // DQNTrainer.h
 #include "Gym.h"
 #include "TrainBufferNode.h"
+#include "ReplayBuffer.h"
 
 #include <mlpack/core.hpp>
 #include <mlpack/methods/ann/ffn.hpp>
 #include <mlpack/methods/ann/layer/layer.hpp>
 #include <mlpack.hpp>
 #include <mutex>
+
 using namespace mlpack;
 using namespace mlpack::ann;
 class DQNTrainer {
@@ -21,13 +23,10 @@ public:
 private:
     Gym &gym;
 
-    FFN<mlpack::ann::MeanSquaredError, mlpack::ann::RandomInitialization> primaryNet;
-    FFN<mlpack::ann::MeanSquaredError, mlpack::ann::RandomInitialization> targetNet;
+    FFN<mlpack::ann::MeanSquaredError, mlpack::ann::HeInitialization> primaryNet;
+    FFN<mlpack::ann::MeanSquaredError, mlpack::ann::HeInitialization> targetNet;
 
-    TrainBufferNode* bufferHead;
-    TrainBufferNode* bufferTail;
-
-    TrainBufferNode* stateBuffer;
+    ReplayBuffer replayBuffer;
 
     std::mutex bufferMutex;
     std::mutex targetNetMutex;
@@ -43,8 +42,10 @@ private:
     void startAdvanceTimer();
     void trainLoop();
     void deleteBufferHead();
-    arma::mat grabState(TrainBufferNode* node);
+    arma::mat grabState();
+    void addNodeToBuffer(TrainBufferNode* node);
+    void collectBatch(arma::mat& batchInputs, arma::mat& batchOutputs);
 
-    FFN<mlpack::ann::MeanSquaredError, mlpack::ann::RandomInitialization>  createNetwork();
-    std::pair<arma::uword, float> ChooseBestAction(arma::mat& state, TrainBufferNode* node);
+    FFN<mlpack::ann::MeanSquaredError, mlpack::ann::HeInitialization>  createNetwork();
+    std::pair<arma::uword, float> ChooseBestAction(arma::mat& state);
 };

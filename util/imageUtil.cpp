@@ -15,7 +15,10 @@ void SaveImage(const std::string& filename, unsigned char* image_data, int width
     }
 }
 
-void ProcessImage(const Uint32* src, unsigned char* dst, int srcWidth, int srcHeight, int dstWidth, int dstHeight) {
+std::shared_ptr<unsigned char[]> ProcessImage(const Uint32* src, int srcWidth, int srcHeight, int dstWidth, int dstHeight) {
+    std::shared_ptr<unsigned char[]> processedState(
+        new unsigned char[dstWidth * dstHeight]
+    );
     float widthRatio = (float)srcWidth / dstWidth;
     float heightRatio = (float)srcHeight / dstHeight;
 
@@ -47,7 +50,8 @@ void ProcessImage(const Uint32* src, unsigned char* dst, int srcWidth, int srcHe
             unsigned char gray = (avgR + avgG + avgB) / 3;
 
             // Store the grayscale value in the destination image
-            dst[y * dstWidth + x] = gray;
+            processedState.get()[y * dstWidth + x] = gray;
         }
     }
+    return processedState;
 }

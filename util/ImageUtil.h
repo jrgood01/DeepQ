@@ -7,7 +7,7 @@
 #include <SDL.h>
 
 void SaveImage(const std::string& filename, unsigned char* image_data, int width, int height);
-void ProcessImage(const uint32_t* src, unsigned char* dst, int srcWidth, int srcHeight, int dstWidth, int dstHeight);
+std::shared_ptr<unsigned char[]> ProcessImage(const Uint32* src, int srcWidth, int srcHeight, int dstWidth, int dstHeight);
 
 
 
